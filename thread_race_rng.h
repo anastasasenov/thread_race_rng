@@ -11,7 +11,7 @@
  * 
  * Compule with C11 support:
  * 
- *  gcc -std=c11 test.c
+ *      gcc -std=c11 -O3 -pthread test.c
  */
 
 #pragma once
