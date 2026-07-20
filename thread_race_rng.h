@@ -27,12 +27,15 @@
 // number of thread
 #define NUMBER_OF_THREADS 3
 
+#define NUMBER_OF_STEPS 7
+
 typedef struct thread_race_rng_t {
 
     atomic_uint_fast64_t m_uValue[ NUMBER_OF_THREADS ];
     atomic_uint_fast64_t m_uPrevValue[ NUMBER_OF_THREADS ];
     thrd_t m_tr_threads[ NUMBER_OF_THREADS ];
     atomic_bool m_bRunning;
+    atomic_uint m_uStep;
 
 } TThreadRaceRNG;
 
@@ -111,6 +114,14 @@ static inline int thread_race_rng_internal(void * pArg) {
     pData = ( TThreadRaceRNG * ) pArg;
     
     assert( pData );
+
+    if ( atomic_load(&(pData->m_uStep)) > NUMBER_OF_STEPS ) {
+
+        thrd_yield();
+        return 0;
+    }
+
+    atomic_fetch_add( &(pData->m_uStep), 1 );
     
     uint64_t uSum;
     
@@ -118,7 +129,10 @@ static inline int thread_race_rng_internal(void * pArg) {
     for (int i = 0; i < NUMBER_OF_THREADS; i++) {
 
         uSum ^= pData->m_uValue[ i ];
+        pData->m_uPrevValue[ i ] = pData->m_uValue[ i ];
         pData->m_uValue[ i ] = uSum ^ pData->m_uValue[ i ];
+        pData->m_uValue[ i ] = thread_race_rng_peres_extract(
+            pData->m_uPrevValue[ i ], pData->m_uValue[ i ]); /* whitening */
     }  
     
     return 0;
@@ -135,6 +149,7 @@ static inline void thread_race_rng_init(TThreadRaceRNG * pData, uint64_t uSeed) 
     assert( pData );
     
     atomic_store( &(pData->m_bRunning), false );
+    atomic_store( &(pData->m_uStep), 0 );
 
     // initial
     for (int i = 0; i < NUMBER_OF_THREADS; i++) {
@@ -163,19 +178,16 @@ static inline uint64_t thread_race_rng_next(TThreadRaceRNG * pData) {
     assert( pData->m_bRunning );
 
     uint64_t uRet;
-    uint64_t uPrevRet;
 
     uRet = 0;
-    uPrevRet = 0;
     for (int i = 0; i < NUMBER_OF_THREADS; i++) {
 
+        uRet ^= ( pData->m_uValue[ i ] ^ pData->m_uPrevValue[ i ] );
         pData->m_uPrevValue[ i ] = pData->m_uValue[ i ];
-        uPrevRet ^= pData->m_uPrevValue[ i ];
-        uRet ^= pData->m_uValue[ i ];
-        pData->m_uValue[ i ] ^= ( uRet << i );
+        pData->m_uValue[ i ] = uRet;
     }
-    
-    uRet = thread_race_rng_peres_extract(uPrevRet, uRet); /* whitening */
+
+    atomic_store( &(pData->m_uStep), 0 );
 
     return uRet;
 }
