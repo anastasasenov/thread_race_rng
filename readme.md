@@ -1,6 +1,6 @@
 # Thread race RNG
 
-An experimental random number generator (RNG) based on thread race conditions.
+An experimental random number generator (RNG) based on thread race conditions. The random generator achieves high speed by avoiding complex mathematical functions.
 
 ## API
 
