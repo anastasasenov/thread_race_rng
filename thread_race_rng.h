@@ -27,7 +27,7 @@
 // number of thread
 #define NUMBER_OF_THREADS 3
 
-#define NUMBER_OF_STEPS 7
+#define NUMBER_OF_STEPS NUMBER_OF_THREADS
 
 typedef struct thread_race_rng_t {
 
@@ -128,8 +128,8 @@ static inline int thread_race_rng_internal(void * pArg) {
     uSum = thread_race_rng_get_mix_time();
     for (int i = 0; i < NUMBER_OF_THREADS; i++) {
 
-        uSum ^= pData->m_uValue[ i ];
         pData->m_uPrevValue[ i ] = pData->m_uValue[ i ];
+        uSum ^= pData->m_uValue[ i ];
         pData->m_uValue[ i ] = uSum ^ pData->m_uValue[ i ];
         pData->m_uValue[ i ] = thread_race_rng_peres_extract(
             pData->m_uPrevValue[ i ], pData->m_uValue[ i ]); /* whitening */
@@ -179,6 +179,11 @@ static inline uint64_t thread_race_rng_next(TThreadRaceRNG * pData) {
 
     uint64_t uRet;
 
+    if ( 0 == atomic_load(&(pData->m_uStep)) ) {
+
+        thread_race_rng_internal( pData ); /* avoid entropy Starvation */
+    }
+
     uRet = 0;
     for (int i = 0; i < NUMBER_OF_THREADS; i++) {
 
@@ -211,3 +216,4 @@ static inline void thread_race_rng_deinit(TThreadRaceRNG * pData) {
         thrd_join( pData->m_tr_threads[i], NULL );
     }
 }
+
