@@ -31,6 +31,17 @@ int random_value = thread_race_rng_next( &stRng );
 thread_race_rng_deinit( &stRng );
 ```
 
+## Notes
+
+Since this project is experimental, we can explore several approaches.
+
+* try BRAKE3 whitening
+* use more/less threads
+* add Runtime Continuous Test
+* use TLS ( thread local storage )
+* add Fail-Safe design implementation
+* avoid Cache Line Bouncing
+
 ## License
 
 This project is open-source and available under the MIT License.
