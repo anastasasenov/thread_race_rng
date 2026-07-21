@@ -124,8 +124,6 @@ static inline int thread_race_rng_internal(void * pArg) {
 
                 pData->m_uPrevValue[ i ] = pData->m_uValue[ i ];
                 pData->m_uValue[ i ] = uClock ^ pData->m_uValue[ i ];
-                pData->m_uValue[ i ] = thread_race_rng_peres_extract(
-                    pData->m_uPrevValue[ i ], pData->m_uValue[ i ]); /* whitening */
             }
             
             atomic_fetch_add( &(pData->m_uStep), 1 );
@@ -170,23 +168,22 @@ static inline uint64_t thread_race_rng_next(TThreadRaceRNG * pData) {
     assert( pData );
     assert( pData->m_bRunning );
 
-    uint64_t uRet = 0;
-
     while ( TRRND_NUMBER_OF_STEPS > atomic_load(&(pData->m_uStep)) ) {
         /* avoid entropy Starvation */
         thrd_yield();
     }
 
+    uint64_t uVal = 0;
+    uint64_t uPrevVal = 0;
     for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
 
-        uRet ^= ( pData->m_uValue[ i ] ^ pData->m_uPrevValue[ i ] );
-        pData->m_uPrevValue[ i ] = pData->m_uValue[ i ];
-        pData->m_uValue[ i ] = uRet;
+        uVal ^= pData->m_uValue[ i ];
+        uPrevVal ^= pData->m_uPrevValue[ i ];
     }
 
     atomic_store( &(pData->m_uStep), 0 );
 
-    return uRet;
+    return thread_race_rng_peres_extract( uPrevVal, uVal); /* whitening */
 }
 
 /**
