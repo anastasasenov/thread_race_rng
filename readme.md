@@ -1,6 +1,6 @@
 # Thread race RNG
 
-An experimental random number generator (RNG) based on thread race conditions. The random generator achieves high speed by avoiding complex mathematical functions.
+This project presents an experimental, software-based True Random Number Generator (TRNG). By exploiting CPU execution non-determinism and thread race conditions, the system generates high-speed random numbers without relying on complex mathematical functions.
 
 ## API
 
@@ -15,6 +15,10 @@ void thread_race_rng_deinit(TThreadRaceRNG * pData)
 uint64_t thread_race_rng_next(TThreadRaceRNG * pData)
 
 ```
+
+## Architecture
+
+Multiple threads modify shared data + steady clock -> Whitening ( Peres extractor ) -> Random numbers
 
 ## An example
 
