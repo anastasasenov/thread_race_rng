@@ -30,6 +30,7 @@
 /* number of racing steps */
 #define TRRND_NUMBER_OF_STEPS TRRND_NUMBER_OF_THREADS
 
+/* RNG control structure */
 typedef struct thread_race_rng_t {
 
     atomic_uint_fast64_t m_uValue[ TRRND_NUMBER_OF_THREADS ];
@@ -40,65 +41,84 @@ typedef struct thread_race_rng_t {
 
 } TThreadRaceRNG;
 
-/** This is Peres whitening algorithm (or Peres extractor) */
-static inline uint64_t thread_race_rng_peres_extract(uint64_t uValue1, uint64_t uValue2) {
+static inline int _get_bit(const uint64_t bits[2], int idx)
+{
+    return (bits[idx >> 6] >> (idx & 63)) & 1;
+}
 
-    uint64_t outValue1 = 0;
-    uint64_t outValue2 = 0;
-    int out_bit_count = 0;
-    int uNumOfBits = sizeof(uint64_t) * 8;
+static inline void _set_bit(uint64_t bits[2], int idx, int value)
+{
+    if (value) {
+        bits[idx >> 6] |= (1ULL << (idx & 63));
+    } else {
+        bits[idx >> 6] &= ~(1ULL << (idx & 63));
+    }
+}
 
-    /* capacity is 128 bits across two variables */
-    uint64_t current[2] = { uValue1, uValue2 };
-    int current_len = 2 * uNumOfBits;
+static inline uint64_t thread_race_rng_peres_extract(uint64_t uValue1, uint64_t uValue2) 
+{
+    uint64_t res_lo = 0;
+    int res_bit_count = 0;
 
-    /* process until we have fewer than 2 bits left */
-    while (current_len >= 2) {
+    uint64_t current[2];
+    current[0] = uValue1;
+    current[1] = uValue2;
+
+    int current_len = 128;
+
+    while ( (current_len >= 2) && (res_bit_count < 64) ) {
 
         uint64_t recycled[2] = {0, 0};
-        int recycled_idx = 0;
+        int recycled_count = 0;
 
-        /* Process the current active bits in pairs */
-        for (int i = 0; i < current_len; i += 2) {
+        for (int i = 0; i + 1 < current_len; i += 2)
+        {
+            int x = _get_bit(current, i);
+            int y = _get_bit(current, i + 1);
 
-            /* Extract the pair (x, y) from the packed 'current' buffer */
-            int word_idx_x = i / uNumOfBits;
-            int bit_idx_x  = i % uNumOfBits;
-            int x = (current[word_idx_x] >> bit_idx_x) & 1;
+            switch ((x << 1) | y)
+            {
+                case 0: /* 00 */
+                    _set_bit(recycled, recycled_count, 0);
+                    recycled_count++;
+                    break;
 
-            int word_idx_y = (i + 1) / uNumOfBits;
-            int bit_idx_y  = (i + 1) % uNumOfBits;
-            int y = (current[word_idx_y] >> bit_idx_y) & 1;
+                case 1: /* 01 */
+                    if (res_bit_count < 64)
+                    {
+                        // rest 0
+                        res_bit_count++;
+                    }
+                    break;
 
-            /* Peres Core Bitwise Logic : Unbiased bit = x ^ y */
-            uint64_t u = (uint64_t)(x ^ y);
-            /* Recycled bit = x */
-            uint64_t v = (uint64_t)x;
+                case 2: /* 10 */
+                    if (res_bit_count < 64)
+                    {
+                        res_lo |= (1ULL << res_bit_count);
+                        res_bit_count++;
+                    }
+                    break;
 
-            /* Pack the unbiased bit into out_bits */
-            int out_word = out_bit_count / uNumOfBits;
-            int out_shift = out_bit_count % uNumOfBits;
-            if ( out_bit_count < uNumOfBits )
-                outValue1 |= (u << out_shift);
-            else
-                outValue2 |= (u << out_shift);
+                case 3: /* 11 */
+                    _set_bit(recycled, recycled_count, 1);
+                    recycled_count++;
+                    break;
 
-            out_bit_count++;
-
-            /* Pack the recycled bit into the next iteration's buffer */
-            int rec_word = recycled_idx / uNumOfBits;
-            int rec_shift = recycled_idx % uNumOfBits;
-            recycled[rec_word] |= (v << rec_shift);
-            recycled_idx++;
+                default: /* safety */
+                    recycled_count++;
+                    break;
+            }
+            
+            if (res_bit_count >= 64)
+                break;
         }
 
-        /* The recycled bits become the input for the next loop iteration */
         current[0] = recycled[0];
         current[1] = recycled[1];
-        current_len = recycled_idx;
+        current_len = recycled_count;
     }
 
-    return ( outValue1 ^ outValue2 );
+    return res_lo;
 }
 
 static inline int thread_race_rng_internal(void * pArg) {
@@ -206,4 +226,5 @@ static inline void thread_race_rng_deinit(TThreadRaceRNG * pData) {
         }
     }
 }
+
 
