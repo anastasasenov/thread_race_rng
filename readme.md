@@ -33,7 +33,7 @@ thread_race_rng_deinit( &stRng );
 
 ## Notes
 
-Since this project is experimental, we can explore several approaches.
+Since this project is experimental, multiple options can be trialed.
 
 * try BRAKE3 whitening
 * use more/less threads
