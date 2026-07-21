@@ -24,9 +24,10 @@
 #include <time.h>
 #include <assert.h>
 
-// number of thread
+/* number of threads */
 #define TRRND_NUMBER_OF_THREADS 3
 
+/* number of racing steps */
 #define TRRND_NUMBER_OF_STEPS TRRND_NUMBER_OF_THREADS
 
 typedef struct thread_race_rng_t {
@@ -39,58 +40,59 @@ typedef struct thread_race_rng_t {
 
 } TThreadRaceRNG;
 
+/** This is Peres whitening algorithm (or Peres extractor) */
 static inline uint64_t thread_race_rng_peres_extract(uint64_t uValue1, uint64_t uValue2) {
 
     uint64_t outValue1 = 0;
     uint64_t outValue2 = 0;
     int out_bit_count = 0;
+    int uNumOfBits = sizeof(uint64_t) * 8;
 
-    // capacity is 128 bits across two variables
+    /* capacity is 128 bits across two variables */
     uint64_t current[2] = { uValue1, uValue2 };
-    int current_len = 128;
+    int current_len = 2 * uNumOfBits;
 
-    // process until we have fewer than 2 bits left
+    /* process until we have fewer than 2 bits left */
     while (current_len >= 2) {
 
         uint64_t recycled[2] = {0, 0};
         int recycled_idx = 0;
 
-        // Process the current active bits in pairs
+        /* Process the current active bits in pairs */
         for (int i = 0; i < current_len; i += 2) {
 
-            // Extract the pair (x, y) from the packed 'current' buffer
-            int word_idx_x = i / 64;
-            int bit_idx_x  = i % 64;
+            /* Extract the pair (x, y) from the packed 'current' buffer */
+            int word_idx_x = i / uNumOfBits;
+            int bit_idx_x  = i % uNumOfBits;
             int x = (current[word_idx_x] >> bit_idx_x) & 1;
 
-            int word_idx_y = (i + 1) / 64;
-            int bit_idx_y  = (i + 1) % 64;
+            int word_idx_y = (i + 1) / uNumOfBits;
+            int bit_idx_y  = (i + 1) % uNumOfBits;
             int y = (current[word_idx_y] >> bit_idx_y) & 1;
 
-            // --- Peres Core Bitwise Logic ---
-            // Unbiased bit = x ^ y
+            /* Peres Core Bitwise Logic : Unbiased bit = x ^ y */
             uint64_t u = (uint64_t)(x ^ y);
-            // Recycled bit = x
+            /* Recycled bit = x */
             uint64_t v = (uint64_t)x;
 
-            // Pack the unbiased bit into out_bits
-            int out_word = out_bit_count / 64;
-            int out_shift = out_bit_count % 64;
-            if ( out_bit_count < 64 )
+            /* Pack the unbiased bit into out_bits */
+            int out_word = out_bit_count / uNumOfBits;
+            int out_shift = out_bit_count % uNumOfBits;
+            if ( out_bit_count < uNumOfBits )
                 outValue1 |= (u << out_shift);
             else
                 outValue2 |= (u << out_shift);
 
             out_bit_count++;
 
-            // Pack the recycled bit into the next iteration's buffer
-            int rec_word = recycled_idx / 64;
-            int rec_shift = recycled_idx % 64;
+            /* Pack the recycled bit into the next iteration's buffer */
+            int rec_word = recycled_idx / uNumOfBits;
+            int rec_shift = recycled_idx % uNumOfBits;
             recycled[rec_word] |= (v << rec_shift);
             recycled_idx++;
         }
 
-        // The recycled bits become the input for the next loop iteration
+        /* The recycled bits become the input for the next loop iteration */
         current[0] = recycled[0];
         current[1] = recycled[1];
         current_len = recycled_idx;
@@ -117,7 +119,7 @@ static inline int thread_race_rng_internal(void * pArg) {
             /* steady timer */
             uint64_t uClock = clock();
             if ( sizeof(clock_t) < sizeof(uint64_t) ) {
-                uClock += ( clock() << sizeof(clock_t) ); /* winrt portable */
+                uClock |= ( clock() << 32 ); /* winrt portable */
             }
 
             for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
