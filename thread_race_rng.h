@@ -25,15 +25,15 @@
 #include <assert.h>
 
 // number of thread
-#define NUMBER_OF_THREADS 3
+#define TRRND_NUMBER_OF_THREADS 3
 
-#define NUMBER_OF_STEPS NUMBER_OF_THREADS
+#define TRRND_NUMBER_OF_STEPS TRRND_NUMBER_OF_THREADS
 
 typedef struct thread_race_rng_t {
 
-    atomic_uint_fast64_t m_uValue[ NUMBER_OF_THREADS ];
-    atomic_uint_fast64_t m_uPrevValue[ NUMBER_OF_THREADS ];
-    thrd_t m_tr_threads[ NUMBER_OF_THREADS ];
+    atomic_uint_fast64_t m_uValue[ TRRND_NUMBER_OF_THREADS ];
+    atomic_uint_fast64_t m_uPrevValue[ TRRND_NUMBER_OF_THREADS ];
+    thrd_t m_tr_threads[ TRRND_NUMBER_OF_THREADS ];
     atomic_bool m_bRunning;
     atomic_uint m_uStep;
 
@@ -99,15 +99,6 @@ static inline uint64_t thread_race_rng_peres_extract(uint64_t uValue1, uint64_t 
     return ( outValue1 ^ outValue2 );
 }
 
-static inline uint64_t thread_race_rng_get_mix_time() {
-
-    struct timespec ts;
-
-    timespec_get(&ts, TIME_UTC); // portable C11 function
-
-    return ( ( (uint64_t)ts.tv_sec << 32) ^ (uint64_t)ts.tv_nsec );
-}
-
 static inline int thread_race_rng_internal(void * pArg) {
 
     TThreadRaceRNG * pData;
@@ -115,58 +106,60 @@ static inline int thread_race_rng_internal(void * pArg) {
     
     assert( pData );
 
-    if ( atomic_load(&(pData->m_uStep)) > NUMBER_OF_STEPS ) {
+    while ( atomic_load(&(pData->m_bRunning)) ) {
 
-        thrd_yield();
-        return 0;
+        if ( atomic_load(&(pData->m_uStep)) > TRRND_NUMBER_OF_STEPS ) {
+
+            thrd_yield();
+
+        } else {
+
+            /* steady timer */
+            uint64_t uClock = clock();
+            if ( sizeof(clock_t) < sizeof(uint64_t) ) {
+                uClock += ( clock() << sizeof(clock_t) ); /* winrt portable */
+            }
+
+            for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
+
+                pData->m_uPrevValue[ i ] = pData->m_uValue[ i ];
+                pData->m_uValue[ i ] = uClock ^ pData->m_uValue[ i ];
+                pData->m_uValue[ i ] = thread_race_rng_peres_extract(
+                    pData->m_uPrevValue[ i ], pData->m_uValue[ i ]); /* whitening */
+            }
+            
+            atomic_fetch_add( &(pData->m_uStep), 1 );
+        }
     }
-
-    atomic_fetch_add( &(pData->m_uStep), 1 );
-    
-    uint64_t uSum;
-    
-    uSum = thread_race_rng_get_mix_time();
-    for (int i = 0; i < NUMBER_OF_THREADS; i++) {
-
-        pData->m_uPrevValue[ i ] = pData->m_uValue[ i ];
-        uSum ^= pData->m_uValue[ i ];
-        pData->m_uValue[ i ] = uSum ^ pData->m_uValue[ i ];
-        pData->m_uValue[ i ] = thread_race_rng_peres_extract(
-            pData->m_uPrevValue[ i ], pData->m_uValue[ i ]); /* whitening */
-    }  
     
     return 0;
 }
 
-// Public API
+/** Public API */
 
 /**
  * Init generator and launch ISO C11 threads
  */
 static inline void thread_race_rng_init(TThreadRaceRNG * pData, uint64_t uSeed) {
 
-    
     assert( pData );
     
-    atomic_store( &(pData->m_bRunning), false );
+    /* initial */
+    atomic_store( &(pData->m_bRunning), true );
     atomic_store( &(pData->m_uStep), 0 );
+    for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
 
-    // initial
-    for (int i = 0; i < NUMBER_OF_THREADS; i++) {
-
-        pData->m_uValue[i] = ( uSeed ^ ( i >> thread_race_rng_get_mix_time() ) );
-        pData->m_uPrevValue[i] = ( uSeed ^ thread_race_rng_get_mix_time() );
+        pData->m_uValue[i] = uSeed;
+        pData->m_uPrevValue[i] = 0;
     }
 
-    // launch threads
-    for (int i = 0; i < NUMBER_OF_THREADS; i++) {
+    /* launch threads */
+    for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
 
         pData->m_tr_threads[i] = 0;
         thrd_create( &(pData->m_tr_threads[i]), thread_race_rng_internal, pData);
         assert( pData->m_tr_threads[i] );
     }
-    
-    atomic_store( &(pData->m_bRunning), true );
 }
 
 /**
@@ -177,15 +170,14 @@ static inline uint64_t thread_race_rng_next(TThreadRaceRNG * pData) {
     assert( pData );
     assert( pData->m_bRunning );
 
-    uint64_t uRet;
+    uint64_t uRet = 0;
 
-    if ( 0 == atomic_load(&(pData->m_uStep)) ) {
-
-        thread_race_rng_internal( pData ); /* avoid entropy Starvation */
+    while ( TRRND_NUMBER_OF_STEPS > atomic_load(&(pData->m_uStep)) ) {
+        /* avoid entropy Starvation */
+        thrd_yield();
     }
 
-    uRet = 0;
-    for (int i = 0; i < NUMBER_OF_THREADS; i++) {
+    for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
 
         uRet ^= ( pData->m_uValue[ i ] ^ pData->m_uPrevValue[ i ] );
         pData->m_uPrevValue[ i ] = pData->m_uValue[ i ];
@@ -204,16 +196,15 @@ static inline void thread_race_rng_deinit(TThreadRaceRNG * pData) {
 
     assert( pData );
 
-    if ( ! atomic_load(&(pData->m_bRunning)) ) {
-        return;
-    }
+    if ( atomic_load(&(pData->m_bRunning)) ) {
+        
+        atomic_store( &(pData->m_bRunning), false);
 
-    atomic_store( &(pData->m_bRunning), false);
+        /* waiting for join */
+        for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
 
-    // waiting for join
-    for (int i = 0; i < NUMBER_OF_THREADS; i++) {
-
-        thrd_join( pData->m_tr_threads[i], NULL );
+            thrd_join( pData->m_tr_threads[i], NULL );
+        }
     }
 }
 
