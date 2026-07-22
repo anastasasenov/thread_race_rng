@@ -55,7 +55,7 @@ static inline void _set_bit(uint64_t bits[2], int idx, int value)
     }
 }
 
-static inline uint64_t thread_race_rng_peres_extract(uint64_t uValue1, uint64_t uValue2) 
+static inline uint64_t _thread_race_rng_peres_extract(uint64_t uValue1, uint64_t uValue2) 
 {
     uint64_t res_lo = 0;
     int res_bit_count = 0;
@@ -121,7 +121,7 @@ static inline uint64_t thread_race_rng_peres_extract(uint64_t uValue1, uint64_t 
     return res_lo;
 }
 
-static inline int thread_race_rng_internal(void * pArg) {
+static inline int _thread_race_rng_internal(void * pArg) {
 
     TThreadRaceRNG * pData;
     pData = ( TThreadRaceRNG * ) pArg;
@@ -136,16 +136,11 @@ static inline int thread_race_rng_internal(void * pArg) {
 
         } else {
 
-            /* steady timer */
-            uint64_t uClock = clock();
-            if ( sizeof(clock_t) < sizeof(uint64_t) ) {
-                uClock |= ( clock() << 32 ); /* winrt portable */
-            }
-
+            uint64_t uClock = clock(); /* steady timer */
             for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
 
                 pData->m_uPrevValue[ i ] = pData->m_uValue[ i ];
-                pData->m_uValue[ i ] = uClock ^ pData->m_uValue[ i ];
+                pData->m_uValue[ i ] = uClock ^ (pData->m_uValue[ i ] << i);
             }
             
             atomic_fetch_add( &(pData->m_uStep), 1 );
@@ -177,7 +172,7 @@ static inline void thread_race_rng_init(TThreadRaceRNG * pData, uint64_t uSeed) 
     for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
 
         pData->m_tr_threads[i] = 0;
-        thrd_create( &(pData->m_tr_threads[i]), thread_race_rng_internal, pData);
+        thrd_create( &(pData->m_tr_threads[i]), _thread_race_rng_internal, pData);
         assert( pData->m_tr_threads[i] );
     }
 }
@@ -205,7 +200,7 @@ static inline uint64_t thread_race_rng_next(TThreadRaceRNG * pData) {
 
     atomic_store( &(pData->m_uStep), 0 );
 
-    return thread_race_rng_peres_extract( uPrevVal, uVal); /* whitening */
+    return _thread_race_rng_peres_extract( uPrevVal, uVal); /* whitening */
 }
 
 /**
@@ -226,5 +221,4 @@ static inline void thread_race_rng_deinit(TThreadRaceRNG * pData) {
         }
     }
 }
-
 
