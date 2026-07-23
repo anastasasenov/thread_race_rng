@@ -43,82 +43,78 @@ typedef struct thread_race_rng_t {
 
 static inline int _get_bit(const uint64_t bits[2], int idx)
 {
-    return (bits[idx >> 6] >> (idx & 63)) & 1;
+    if (idx < 0 || idx >= 128) return 0;
+
+    return (int)((bits[idx >> 6] >> (idx & 63)) & 1ULL);
 }
 
 static inline void _set_bit(uint64_t bits[2], int idx, int value)
 {
-    if (value) {
-        bits[idx >> 6] |= (1ULL << (idx & 63));
-    } else {
-        bits[idx >> 6] &= ~(1ULL << (idx & 63));
-    }
+    if (idx < 0 || idx >= 128) return;
+    
+    uint64_t mask = 1ULL << (idx & 63);
+
+    if (value)
+        bits[idx >> 6] |= mask;
+    else
+        bits[idx >> 6] &= ~mask;
 }
 
-static inline uint64_t _thread_race_rng_peres_extract(uint64_t uValue1, uint64_t uValue2) 
+static void _peres_extract_recursive(
+    const uint64_t input[2],
+    int input_len,
+    uint64_t *result,
+    int *result_bits)
 {
-    uint64_t res_lo = 0;
-    int res_bit_count = 0;
+    if (input_len < 2 || *result_bits >= 64)
+        return;
 
-    uint64_t current[2];
-    current[0] = uValue1;
-    current[1] = uValue2;
+    uint64_t u_stream[2] = { 0, 0 };
+    uint64_t v_stream[2] = { 0, 0 };
+    int u_len = 0;
+    int v_len = 0;
 
-    int current_len = 128;
+    for (int i = 0; i + 1 < input_len; i += 2)
+    {
+        if (*result_bits >= 64)
+            break;
 
-    while ( (current_len >= 2) && (res_bit_count < 64) ) {
+        int x = _get_bit(input, i);
+        int y = _get_bit(input, i + 1);
 
-        uint64_t recycled[2] = {0, 0};
-        int recycled_count = 0;
-
-        for (int i = 0; i + 1 < current_len; i += 2)
+        if (x != y)
         {
-            int x = _get_bit(current, i);
-            int y = _get_bit(current, i + 1);
-
-            switch ((x << 1) | y)
-            {
-                case 0: /* 00 */
-                    _set_bit(recycled, recycled_count, 0);
-                    recycled_count++;
-                    break;
-
-                case 1: /* 01 */
-                    if (res_bit_count < 64)
-                    {
-                        // rest 0
-                        res_bit_count++;
-                    }
-                    break;
-
-                case 2: /* 10 */
-                    if (res_bit_count < 64)
-                    {
-                        res_lo |= (1ULL << res_bit_count);
-                        res_bit_count++;
-                    }
-                    break;
-
-                case 3: /* 11 */
-                    _set_bit(recycled, recycled_count, 1);
-                    recycled_count++;
-                    break;
-
-                default: /* safety */
-                    recycled_count++;
-                    break;
+            if (x == 1) {
+                *result |= (1ULL << *result_bits);
             }
-            
-            if (res_bit_count >= 64)
-                break;
-        }
+            (*result_bits)++;
 
-        current[0] = recycled[0];
-        current[1] = recycled[1];
-        current_len = recycled_count;
+            _set_bit(u_stream, u_len++, 1);
+        }
+        else
+        {
+            _set_bit(u_stream, u_len++, 0);
+
+            _set_bit(v_stream, v_len++, x);
+        }
     }
 
-    return res_lo;
+    _peres_extract_recursive(u_stream, u_len, result, result_bits);
+
+    _peres_extract_recursive(v_stream, v_len, result, result_bits);
+}
+
+static inline uint64_t _thread_race_rng_peres_extract(
+    uint64_t value1,
+    uint64_t value2)
+{
+    uint64_t result = 0;
+    int result_bits = 0;
+    uint64_t input[2] = { value1, value2 };
+
+    _peres_extract_recursive(input, 128, &result, &result_bits);
+
+    return result;
 }
 
 static inline int _thread_race_rng_internal(void * pArg) {
@@ -136,11 +132,17 @@ static inline int _thread_race_rng_internal(void * pArg) {
 
         } else {
 
+            struct timespec ts;
+            timespec_get(&ts, TIME_UTC);
+
             uint64_t uClock = clock(); /* steady timer */
+            uClock = uClock << 32 | ts.tv_nsec;
             for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
 
+                thrd_yield();
                 pData->m_uPrevValue[ i ] = pData->m_uValue[ i ];
-                pData->m_uValue[ i ] = uClock ^ (pData->m_uValue[ i ] << i);
+                thrd_yield();
+                pData->m_uValue[ i ] = uClock ^ pData->m_uValue[ i ];
             }
             
             atomic_fetch_add( &(pData->m_uStep), 1 );
