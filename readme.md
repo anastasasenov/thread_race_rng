@@ -31,6 +31,14 @@ int random_value = thread_race_rng_next( &stRng );
 thread_race_rng_deinit( &stRng );
 ```
 
+## Tests
+
+```
+$ cmake path-to/thread_race_rng
+$ make
+$ ./thread_race_rng_test && echo $?
+```
+
 ## Notes
 
 Since this project is experimental, multiple options can be trialed.
