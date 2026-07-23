@@ -136,13 +136,13 @@ static inline int _thread_race_rng_internal(void * pArg) {
             timespec_get(&ts, TIME_UTC);
 
             uint64_t uClock = clock(); /* steady timer */
-            uClock = uClock << 32 | ts.tv_nsec;
+            uClock = ((uClock << 32) | ts.tv_nsec) ^ ( ts.tv_sec << 4 );
             for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
 
                 thrd_yield();
                 pData->m_uPrevValue[ i ] = pData->m_uValue[ i ];
                 thrd_yield();
-                pData->m_uValue[ i ] = uClock ^ pData->m_uValue[ i ];
+                pData->m_uValue[ i ] = uClock ^ ( pData->m_uValue[ i ] << (i ? 0 : 1) );
             }
             
             atomic_fetch_add( &(pData->m_uStep), 1 );
@@ -196,13 +196,13 @@ static inline uint64_t thread_race_rng_next(TThreadRaceRNG * pData) {
     uint64_t uPrevVal = 0;
     for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
 
-        uVal ^= pData->m_uValue[ i ];
-        uPrevVal ^= pData->m_uPrevValue[ i ];
+        uVal = pData->m_uValue[ i ];
+        uPrevVal = pData->m_uPrevValue[ i ];
     }
 
     atomic_store( &(pData->m_uStep), 0 );
 
-    return _thread_race_rng_peres_extract( uPrevVal, uVal); /* whitening */
+    return _thread_race_rng_peres_extract( uVal, uPrevVal); /* whitening */
 }
 
 /**
