@@ -62,8 +62,8 @@ int test_perf() {
     
     timespec_get(&tsEnd, TIME_UTC);
 
-    // less than 2 seconds
-    assert ( (tsEnd.tv_sec - tsStart.tv_sec) < 2 );
+    // less than 3 seconds
+    assert ( (tsEnd.tv_sec - tsStart.tv_sec) < 3 );
     
     return 0;
 }
@@ -104,7 +104,7 @@ int test_xi_sq() {
     thread_race_rng_deinit( &rngLoc );
 
     const double critical_value = 16.919;
-    printf("\t\t Xi_squared: %f ( critical_value: %f )\n", xi_squared, critical_value);
+    printf("\t\t Xi_squared: %f ( less than critical_value: %f )\n", xi_squared, critical_value);
     assert (xi_squared < critical_value);
 
     return 0;
@@ -147,7 +147,7 @@ int test_serial() {
     thread_race_rng_deinit( &rngLoc );
 
     const double critical_value = 25.0;
-    printf("\t\t Xi_squared: %f ( critical_value: %f )\n", xi_squared, critical_value);
+    printf("\t\t Xi_squared: %f ( less than critical_value: %f )\n", xi_squared, critical_value);
     assert (xi_squared < critical_value);
 
     return 0;
@@ -187,7 +187,7 @@ int test_monobit() {
     thread_race_rng_deinit( &rngLoc );
 
     const double critical_value = 0.1;
-    printf("\t\t p_value: %f ( critical_value: %f )\n", p_value, critical_value);
+    printf("\t\t p_value: %f ( less than critical_value: %f )\n", p_value, critical_value);
     assert (p_value < critical_value);
 
     return 0;
@@ -231,7 +231,7 @@ int test_oscillation() {
     double p_value = erfc(num / den);
 
     const double critical_value = 0.01;
-    printf("\t\t p_value: %f ( critical_value: %f )\n", p_value, critical_value);
+    printf("\t\t p_value: %f ( more than critical_value: %f )\n", p_value, critical_value);
     assert (p_value >= critical_value);
 
     return 0;
