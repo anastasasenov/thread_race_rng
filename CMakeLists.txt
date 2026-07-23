@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 
-# Project name
-project(thread_race_rng_test C)
+# Test project name
+set(TEST_PRJ thread_race_rng_test)
+project(${TEST_PRJ} C)
 
 # C11
 set(CMAKE_C_STANDARD 11)
@@ -16,9 +17,12 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
 endif()
 
 find_package(Threads REQUIRED)
+find_library(MATH_LIBRARY m)
 
 # test executable
-add_executable(thread_race_rng_test test.c)
+add_executable(${TEST_PRJ} test.c)
 
 # link_pthread
-target_link_libraries(thread_race_rng_test PRIVATE Threads::Threads)
+target_link_libraries(${TEST_PRJ} PRIVATE Threads::Threads)
+target_link_libraries(${TEST_PRJ} PRIVATE ${MATH_LIBRARY})
+
