@@ -11,12 +11,12 @@
 #include <time.h>
 
 #define NUM_OF_T 11
-#define NUM_OF_RN ( (uint64_t)1 << 10 )
+#define NUM_OF_RN ( (uint64_t)1 << 11 )
 #define NUM_OF_SAMPLES 100000
 #define NUM_BUCKETS 10
 #define NUM_SER_BUCKETS 4
 #define NUM_BYTES NUM_OF_SAMPLES
-#define TOTAL_BITS 50000
+#define TOTAL_BITS NUM_OF_SAMPLES
 
 TThreadRaceRNG stRng;
 uint64_t random_value = 0;
@@ -230,9 +230,9 @@ int test_oscillation() {
     double den = 2.0 * sqrt(2.0 * TOTAL_BITS) * pi * (1.0 - pi);
     double p_value = erfc(num / den);
 
-    const double critical_value = 0.1;
+    const double critical_value = 0.01;
     printf("\t\t p_value: %f ( critical_value: %f )\n", p_value, critical_value);
-    assert (p_value < critical_value);
+    assert (p_value >= critical_value);
 
     return 0;
 }
