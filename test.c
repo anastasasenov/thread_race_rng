@@ -11,7 +11,7 @@
 #include <time.h>
 
 #define NUM_OF_T 11
-#define NUM_OF_RN ( (uint64_t)1 << 11 )
+#define NUM_OF_RN ( (uint64_t)1 << 10 )
 #define NUM_OF_SAMPLES 100000
 #define NUM_BUCKETS 10
 #define NUM_SER_BUCKETS 4
