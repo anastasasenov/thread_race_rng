@@ -16,7 +16,7 @@
 #define NUM_BUCKETS 10
 #define NUM_SER_BUCKETS 4
 #define NUM_BYTES NUM_OF_SAMPLES
-
+#define TOTAL_BITS 50000
 
 TThreadRaceRNG stRng;
 uint64_t random_value = 0;
@@ -193,6 +193,50 @@ int test_monobit() {
     return 0;
 }
 
+bool test_monobit_bit_rng(TThreadRaceRNG * p) {
+
+    return (1 == (thread_race_rng_next(p) % 2));
+}
+
+int test_oscillation() {
+
+    TThreadRaceRNG rngLoc;
+    bool bits[TOTAL_BITS];
+    double ones_count = 0;
+
+    printf("\n\t5. Testing Oscillation ...\n");
+
+    thread_race_rng_init( &rngLoc, time(NULL) );
+
+   for (int i = 0; i < TOTAL_BITS; i++) {
+        bits[i] = test_monobit_bit_rng( &rngLoc );
+        if (bits[i]) ones_count++;
+    }
+    
+    thread_race_rng_deinit( &rngLoc );
+
+    double pi = ones_count / TOTAL_BITS;
+    
+    assert( fabs(pi - 0.5) < (2.0 / sqrt(TOTAL_BITS)));
+    
+    int runs = 1; 
+    for (int i = 0; i < TOTAL_BITS - 1; i++) {
+        if (bits[i] != bits[i+1]) {
+            runs++;
+        }
+    }
+  
+    double num = fabs((double)runs - (2.0 * TOTAL_BITS * pi * (1.0 - pi)));
+    double den = 2.0 * sqrt(2.0 * TOTAL_BITS) * pi * (1.0 - pi);
+    double p_value = erfc(num / den);
+
+    const double critical_value = 0.1;
+    printf("\t\t p_value: %f ( critical_value: %f )\n", p_value, critical_value);
+    assert (p_value < critical_value);
+
+    return 0;
+}
+
 int main() {
    
     printf("\n*** thread_race_rng tests ***\n");
@@ -202,7 +246,8 @@ int main() {
     int nRet = test_perf()
         + test_xi_sq()
         + test_serial()
-        + test_monobit();
+        + test_monobit()
+        + test_oscillation();
     
     thread_race_rng_deinit( &stRng );
 
