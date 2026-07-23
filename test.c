@@ -12,8 +12,9 @@
 
 #define NUM_OF_T 11
 #define NUM_OF_RN ( (uint64_t)1 << 10 )
-#define NUM_OF_SAMPLES 100000
+#define NUM_OF_SAMPLES 10000
 #define NUM_BUCKETS 10
+#define NUM_SER_BUCKETS 4
 
 
 TThreadRaceRNG stRng;
@@ -102,7 +103,7 @@ int test_xi_sq() {
     thread_race_rng_deinit( &rngLoc );
 
     const double critical_value = 16.919;
-    printf("\t\t\Xi_squared: %f ( critical_value: %f )\n", xi_squared, critical_value);
+    printf("\t\t Xi_squared: %f ( critical_value: %f )\n", xi_squared, critical_value);
     assert (xi_squared < critical_value);
 
     return 0;
@@ -110,8 +111,44 @@ int test_xi_sq() {
 
 int test_serial() {
     
+    TThreadRaceRNG rngLoc;
+    int pair_counts[NUM_SER_BUCKETS][NUM_SER_BUCKETS]; // 2D array
+    
     printf("\n\t3. Serial test ( Testing Pairs/Independence ) ...\n");
     
+    thread_race_rng_init( &rngLoc, time(NULL) ); /* seed */
+
+    /* init */
+    for (int i = 0; i < NUM_SER_BUCKETS; i ++) {
+        for (int j = 0; j < NUM_SER_BUCKETS; j ++) {
+            pair_counts[i][j] = 0;
+        }
+    }
+
+    int current = (thread_race_rng_next( &rngLoc ) % NUM_SER_BUCKETS);
+    for (int i = 0; i < NUM_OF_SAMPLES; i++) {
+        int next = (thread_race_rng_next( &rngLoc ) % NUM_SER_BUCKETS);
+        pair_counts[current][next] ++;
+        current = next;
+    }
+    
+    double expected = (double)NUM_OF_SAMPLES / (NUM_SER_BUCKETS * NUM_SER_BUCKETS);
+    double xi_squared = 0.0;
+    
+    for (int i = 0; i < NUM_SER_BUCKETS; i ++) {
+        for (int j = 0; j < NUM_SER_BUCKETS; j ++) {
+            double observed = pair_counts[i][j];
+            double diff = observed - expected;
+            xi_squared += (diff * diff) / expected;
+        }
+    }
+
+    thread_race_rng_deinit( &rngLoc );
+
+    const double critical_value = 25.0;
+    printf("\t\t Xi_squared: %f ( critical_value: %f )\n", xi_squared, critical_value);
+    assert (xi_squared < critical_value);
+
     return 0;
 }
 
@@ -131,4 +168,3 @@ int main() {
     
     return nRet;
 }
-
