@@ -12,9 +12,10 @@
 
 #define NUM_OF_T 11
 #define NUM_OF_RN ( (uint64_t)1 << 10 )
-#define NUM_OF_SAMPLES 50000
+#define NUM_OF_SAMPLES 100000
 #define NUM_BUCKETS 10
 #define NUM_SER_BUCKETS 4
+#define NUM_BYTES NUM_OF_SAMPLES
 
 
 TThreadRaceRNG stRng;
@@ -152,6 +153,46 @@ int test_serial() {
     return 0;
 }
 
+uint8_t test_monobit_byte_rng(TThreadRaceRNG * p) {
+
+    return (uint8_t)(thread_race_rng_next(p) % 256);
+}
+
+int test_monobit() {
+    
+    TThreadRaceRNG rngLoc;
+
+    printf("\n\t4. Monobit Test (Frequency Test at Bit Level) ...\n");
+
+    thread_race_rng_init( &rngLoc, time(NULL) ); /* seed */
+
+    int Sn = 0; /* sum: +1 for bit '1', -1 for bit '0' */
+    
+    for (int i = 0; i < NUM_BYTES; i++) {
+
+        uint8_t byte = test_monobit_byte_rng( &rngLoc );
+        for (int b = 0; b < 8; b++) {
+            if ((byte >> b) & 1) {
+                Sn += 1;
+            } else {
+                Sn -= 1;
+            }
+        }
+    }
+
+    int total_bits = NUM_BYTES * 8;
+    double s_obs = abs(Sn) / sqrt(total_bits);
+    double p_value = erfc(s_obs / sqrt(2.0));
+    
+    thread_race_rng_deinit( &rngLoc );
+
+    const double critical_value = 0.1;
+    printf("\t\t p_value: %f ( critical_value: %f )\n", p_value, critical_value);
+    assert (p_value < critical_value);
+
+    return 0;
+}
+
 int main() {
    
     printf("\n*** thread_race_rng tests ***\n");
@@ -160,7 +201,8 @@ int main() {
 
     int nRet = test_perf()
         + test_xi_sq()
-        + test_serial();
+        + test_serial()
+        + test_monobit();
     
     thread_race_rng_deinit( &stRng );
 
