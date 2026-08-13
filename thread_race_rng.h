@@ -127,7 +127,7 @@ static inline void _thread_race_rng_fn(TThreadRaceRNG * pData) {
     timespec_get(&ts, TIME_UTC);
 
     uint64_t uClock = clock(); /* steady timer */
-    uClock = ((uClock << 32) | ts.tv_nsec) ^ ( ts.tv_sec << 4 );
+    uClock ^= ts.tv_nsec;
     for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
 
         thrd_yield();
