@@ -24,6 +24,10 @@
 #include <time.h>
 #include <assert.h>
 
+/* version */
+#define TRRND_VERSION_MAJOR 1
+#define TRRND_VERSION_MINOR 0
+
 /* number of threads */
 #define TRRND_NUMBER_OF_THREADS 3
 
@@ -117,6 +121,22 @@ static inline uint64_t _thread_race_rng_peres_extract(
     return result;
 }
 
+static inline void _thread_race_rng_fn(TThreadRaceRNG * pData) {
+    
+    struct timespec ts;
+    timespec_get(&ts, TIME_UTC);
+
+    uint64_t uClock = clock(); /* steady timer */
+    uClock = ((uClock << 32) | ts.tv_nsec) ^ ( ts.tv_sec << 4 );
+    for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
+
+        thrd_yield();
+        pData->m_uPrevValue[ i ] = pData->m_uValue[ i ];
+        thrd_yield();
+        pData->m_uValue[ i ] = uClock ^ ( pData->m_uValue[ i ] << (i ? 0 : 1) );
+    }
+}
+
 static inline int _thread_race_rng_internal(void * pArg) {
 
     TThreadRaceRNG * pData;
@@ -132,18 +152,7 @@ static inline int _thread_race_rng_internal(void * pArg) {
 
         } else {
 
-            struct timespec ts;
-            timespec_get(&ts, TIME_UTC);
-
-            uint64_t uClock = clock(); /* steady timer */
-            uClock = ((uClock << 32) | ts.tv_nsec) ^ ( ts.tv_sec << 4 );
-            for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
-
-                thrd_yield();
-                pData->m_uPrevValue[ i ] = pData->m_uValue[ i ];
-                thrd_yield();
-                pData->m_uValue[ i ] = uClock ^ ( pData->m_uValue[ i ] << (i ? 0 : 1) );
-            }
+            _thread_race_rng_fn( pData );
             
             atomic_fetch_add( &(pData->m_uStep), 1 );
         }
@@ -224,3 +233,10 @@ static inline void thread_race_rng_deinit(TThreadRaceRNG * pData) {
     }
 }
 
+/**
+ * Version info
+ */
+static inline int thread_race_rng_version(void) {
+
+    return ( (TRRND_VERSION_MAJOR << 8) | TRRND_VERSION_MINOR );
+}
