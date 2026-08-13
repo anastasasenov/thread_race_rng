@@ -121,26 +121,6 @@ static inline uint64_t _thread_race_rng_peres_extract(
     return result;
 }
 
-/* -----------------------------------------------------------------
- * Tiny LCG – parameters from Numerical Recipes (same as glibc’s rand)
- *   Xₙ₊₁ = (a·Xₙ + c) mod 2³²
- *   a = 1103515245,  c = 12345
- * ----------------------------------------------------------------- */
-static uint64_t _thread_race_rng_lcg(uint64_t nValue)
-{
-    /* Linear congruential generator x(n) = ( a*x(n-1) + c ) mod 2**64 */
-
-    struct timespec ts;
-    timespec_get(&ts, TIME_UTC);
-
-    uint64_t uClock = clock(); /* steady timer */
-
-    uint64_t a = ((uClock << 32) | ( ts.tv_nsec ^ ts.tv_sec ) );
-    const uint64_t c = 0x8EC514FBE268170FULL; // prime number
-
-    return ( a * nValue + c );
-}
-
 static inline void _thread_race_rng_fn(TThreadRaceRNG * pData) {
     
     struct timespec ts;
@@ -150,8 +130,8 @@ static inline void _thread_race_rng_fn(TThreadRaceRNG * pData) {
     uClock = ((uClock << 32) | ts.tv_nsec) ^ ( ts.tv_sec << 4 );
     for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
 
-        pData->m_uPrevValue[ i ] = _thread_race_rng_lcg( pData->m_uValue[ i ] );
         thrd_yield();
+        pData->m_uValue[ i ] = uClock ^ ( pData->m_uValue[ i ] << (i ? 0 : 1) );
     }
 }
 
