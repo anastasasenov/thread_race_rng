@@ -122,16 +122,18 @@ static inline uint64_t _thread_race_rng_peres_extract(
 }
 
 static inline void _thread_race_rng_fn(TThreadRaceRNG * pData) {
-    
-    struct timespec ts;
-    timespec_get(&ts, TIME_UTC);
 
-    uint64_t uClock = clock(); /* steady timer */
-    uClock ^= ts.tv_nsec;
+    uint64_t uClock = 0;
+    struct timespec ts;
+
     for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
 
         thrd_yield();
-        pData->m_uValue[ i ] = uClock ^ ( pData->m_uValue[ i ] << (i ? 0 : 1) );
+        uClock = clock(); /* steady timer */
+        thrd_yield();
+        timespec_get(&ts, TIME_UTC);
+        pData->m_uValue[ i ] = ts.tv_nsec ^ ( uClock << 32 )
+            ^ ( pData->m_uValue[ i ] << (i ? 0 : 1) );
     }
 }
 
