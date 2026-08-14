@@ -207,6 +207,7 @@ static inline uint64_t thread_race_rng_next(TThreadRaceRNG * pData) {
 
         uVal = pData->m_uValue[ i ];
         uPrevVal = pData->m_uPrevValue[ i ];
+        pData->m_uPrevValue[ i ] = uVal;
     }
 
     atomic_store( &(pData->m_uStep), 0 );
