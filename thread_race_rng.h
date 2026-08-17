@@ -206,8 +206,9 @@ static inline uint64_t thread_race_rng_next(TThreadRaceRNG * pData) {
     for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
 
         uVal = pData->m_uValue[ i ];
-        uPrevVal = pData->m_uPrevValue[ i ];
+        uPrevVal ^= pData->m_uPrevValue[ i ] << i;
         pData->m_uPrevValue[ i ] = uVal;
+        uVal ^= pData->m_uValue[ i ] << i;
     }
 
     atomic_store( &(pData->m_uStep), 0 );
