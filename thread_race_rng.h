@@ -132,8 +132,8 @@ static inline void _thread_race_rng_fn(TThreadRaceRNG * pData) {
         uClock = clock(); /* steady timer */
         thrd_yield();
         timespec_get(&ts, TIME_UTC);
-        pData->m_uValue[ i ] = ts.tv_nsec ^ ( uClock << 32 )
-            ^ ( pData->m_uValue[ i ] << (i ? 0 : 1) );
+        pData->m_uValue[ i ] = ts.tv_nsec ^ ( uClock << (32+i) )
+            ^ ( pData->m_uValue[ i ] << i );
     }
 }
 
@@ -205,10 +205,9 @@ static inline uint64_t thread_race_rng_next(TThreadRaceRNG * pData) {
     uint64_t uPrevVal = 0;
     for (int i = 0; i < TRRND_NUMBER_OF_THREADS; i++) {
 
-        uVal = pData->m_uValue[ i ];
         uPrevVal ^= pData->m_uPrevValue[ i ] << i;
-        pData->m_uPrevValue[ i ] = uVal;
         uVal ^= pData->m_uValue[ i ] << i;
+        pData->m_uPrevValue[ i ] = pData->m_uValue[ i ];
     }
 
     atomic_store( &(pData->m_uStep), 0 );
