@@ -186,9 +186,9 @@ int test_monobit() {
     
     thread_race_rng_deinit( &rngLoc );
 
-    const double critical_value = 0.1;
-    printf("\t\t p_value: %f ( less than critical_value: %f )\n", p_value, critical_value);
-    assert (p_value < critical_value);
+    const double critical_value = 0.01;
+    printf("\t\t p_value: %f ( more than critical_value: %f )\n", p_value, critical_value);
+    assert (p_value > critical_value);
 
     return 0;
 }
